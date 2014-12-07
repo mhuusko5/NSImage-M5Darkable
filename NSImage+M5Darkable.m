@@ -1,6 +1,6 @@
 //
 //  NSImage+M5Darkable.m
-//  Mathew Huusko V
+//  NSImage+M5Darkable
 //
 //  Created by Mathew Huusko V on 12/6/14.
 //  Copyright (c) 2014 Mathew Huusko V. All rights reserved.
