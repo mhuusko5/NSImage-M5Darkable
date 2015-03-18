@@ -2,8 +2,8 @@
 //  NSImage+M5Darkable.m
 //  NSImage+M5Darkable
 //
-//  Created by Mathew Huusko V on 12/6/14.
-//  Copyright (c) 2014 Mathew Huusko V. All rights reserved.
+//  Created by Mathew Huusko V.
+//  Copyright (c) 2015 Mathew Huusko V. All rights reserved.
 //
 
 #import "NSImage+M5Darkable.h"
@@ -13,20 +13,42 @@
 
 @implementation NSImage (M5Darkable)
 
-const void* M5_darkableKey = &M5_darkableKey;
+#pragma mark - NSImage+M5Darkable -
 
-- (void)setM5_darkable:(BOOL)M5_darkable {
-    objc_setAssociatedObject(self, M5_darkableKey, @(M5_darkable), OBJC_ASSOCIATION_RETAIN);
+#pragma mark Methods
+
+- (void)setM5_darkable:(BOOL)darkable {
+    objc_setAssociatedObject(self, @selector(M5_darkable), @(darkable), OBJC_ASSOCIATION_RETAIN);
 }
+
+#pragma mark Properties
 
 - (BOOL)M5_darkable {
-    return [objc_getAssociatedObject(self, M5_darkableKey) boolValue];
+    return [objc_getAssociatedObject(self, @selector(M5_darkable)) boolValue];
 }
 
-const void* InvertedSelfKey = &InvertedSelfKey;
+#pragma mark -
+
+#pragma mark - NSImage+M5Darkable (Private) -
+
+#pragma mark Methods
+
+static BOOL darkModeState = NO;
+
++ (void)RM_updateDarkModeState {
+    NSDictionary *globalPersistentDomain = [[NSUserDefaults standardUserDefaults] persistentDomainForName:NSGlobalDomain];
+    @try {
+        NSString *interfaceStyle = [globalPersistentDomain valueForKey:@"AppleInterfaceStyle"];
+        darkModeState = [interfaceStyle isEqualToString:@"Dark"];
+    } @catch (NSException *exception) {
+        darkModeState = NO;
+    }
+}
+
+#pragma mark Properties
 
 - (NSImage *)M5_invertedSelf {
-	NSImage *invertedSelf = objc_getAssociatedObject(self, InvertedSelfKey);
+	NSImage *invertedSelf = objc_getAssociatedObject(self, @selector(M5_invertedSelf));
     
     if (!invertedSelf) {
         CIImage *normalCiImage = [[CIImage alloc] initWithData:[self TIFFRepresentation]];
@@ -43,46 +65,50 @@ const void* InvertedSelfKey = &InvertedSelfKey;
         invertedSelf = [[NSImage alloc] initWithSize:rep.size];
         [invertedSelf addRepresentation:rep];
         
-        objc_setAssociatedObject(self, InvertedSelfKey, invertedSelf, OBJC_ASSOCIATION_RETAIN);
+        objc_setAssociatedObject(self, @selector(M5_invertedSelf), invertedSelf, OBJC_ASSOCIATION_RETAIN);
     }
 
 	return invertedSelf;
 }
 
-static BOOL darkModeState = NO;
+#pragma mark -
 
-+ (void)RM_updateDarkModeState {
-	NSDictionary *globalPersistentDomain = [[NSUserDefaults standardUserDefaults] persistentDomainForName:NSGlobalDomain];
-	@try {
-		NSString *interfaceStyle = [globalPersistentDomain valueForKey:@"AppleInterfaceStyle"];
-		darkModeState = [interfaceStyle isEqualToString:@"Dark"];
-	} @catch (NSException *exception) {
-		darkModeState = NO;
-	}
-}
+#pragma mark - NSObject -
 
-+ (void)M5_initialize {
-	[self M5_initialize];
-
-	[[NSDistributedNotificationCenter defaultCenter] addObserverForName:@"AppleInterfaceThemeChangedNotification" object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *notification) {
-	    [self RM_updateDarkModeState];
-	}];
-
-	[self RM_updateDarkModeState];
-}
-
-- (void)M5_drawInRect:(NSRect)dstSpacePortionRect fromRect:(NSRect)srcSpacePortionRect operation:(NSCompositingOperation)op fraction:(CGFloat)requestedAlpha respectFlipped:(BOOL)respectContextIsFlipped hints:(NSDictionary *)hints {
-	if (!darkModeState || !self.M5_darkable) {
-		return [self M5_drawInRect:dstSpacePortionRect fromRect:srcSpacePortionRect operation:op fraction:requestedAlpha respectFlipped:respectContextIsFlipped hints:hints];
-	}
-
-	return [self.M5_invertedSelf M5_drawInRect:dstSpacePortionRect fromRect:srcSpacePortionRect operation:op fraction:requestedAlpha respectFlipped:respectContextIsFlipped hints:hints];
-}
+#pragma mark Methods
 
 + (void)load {
-	method_exchangeImplementations(class_getClassMethod(self, @selector(initialize)), class_getClassMethod(self, @selector(M5_initialize)));
+    [[NSDistributedNotificationCenter defaultCenter] addObserverForName:@"AppleInterfaceThemeChangedNotification" object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *notification) {
+        [self RM_updateDarkModeState];
+    }];
+    
+    [self RM_updateDarkModeState];
 
-	method_exchangeImplementations(class_getInstanceMethod(self, @selector(drawInRect:fromRect:operation:fraction:respectFlipped:hints:)), class_getInstanceMethod(self, @selector(M5_drawInRect:fromRect:operation:fraction:respectFlipped:hints:)));
+    @synchronized(self) {
+        SEL selector = @selector(drawInRect:fromRect:operation:fraction:respectFlipped:hints:);
+        
+        __block IMP oldImp = nil;
+        IMP newImp = imp_implementationWithBlock(^(id self, NSRect dstSpacePortionRect, NSRect srcSpacePortionRect, NSCompositingOperation op, CGFloat requestedAlpha, BOOL respectContextIsFlipped, NSDictionary* hints) {
+            if (oldImp) {
+                if (!darkModeState || !((NSImage *)self).M5_darkable) {
+                    return ((void(*)(id, SEL, NSRect, NSRect, NSCompositingOperation, CGFloat, BOOL, NSDictionary*))oldImp)(self, selector, dstSpacePortionRect, srcSpacePortionRect, op, requestedAlpha, respectContextIsFlipped, hints);
+                }
+                
+                return ((void(*)(id, SEL, NSRect, NSRect, NSCompositingOperation, CGFloat, BOOL, NSDictionary*))oldImp)(((NSImage *)self).M5_invertedSelf, selector, dstSpacePortionRect, srcSpacePortionRect, op, requestedAlpha, respectContextIsFlipped, hints);
+            }
+        });
+        
+        Method method = class_getInstanceMethod(self, selector);
+        if (method) {
+            oldImp = method_setImplementation(method, newImp);
+        } else {
+            const char *methodTypes = [NSString stringWithFormat:@"%s%s%s%s%s%s%s%s%s", @encode(void), @encode(id), @encode(SEL), @encode(NSRect), @encode(NSRect), @encode(NSCompositingOperation), @encode(CGFloat), @encode(BOOL), @encode(NSDictionary*)].UTF8String;
+            
+            class_addMethod(self, selector, newImp, methodTypes);
+        }
+    }
 }
+
+#pragma mark -
 
 @end
