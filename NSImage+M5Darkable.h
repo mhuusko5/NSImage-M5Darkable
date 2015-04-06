@@ -14,7 +14,8 @@
 
 #pragma mark Properties
 
-@property (assign, readwrite) BOOL M5_darkable; //Default: NO
+/** Whether image should invert colors when Yosemite dark mode is enabled. Defaults to NO. */
+@property (assign, readwrite) BOOL M5_darkable;
 
 #pragma mark -
 
