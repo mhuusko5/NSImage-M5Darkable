@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = 'NSImage+M5Darkable'
-  s.version = '1.0.1'
+  s.version = '1.1.0'
   s.license = { :type => 'MIT', :file => 'LICENSE' }
   s.summary = 'Adds choice to have particular NSImage draw in inverted colors when OS X is in the new Yosemite "dark mode."'
   s.homepage = 'https://github.com/mhuusko5/NSImage-M5Darkable'
